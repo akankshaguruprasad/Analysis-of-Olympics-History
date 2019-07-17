@@ -1,0 +1,536 @@
+---
+title: "R Project - Analysis of Olympics Data"
+author: "Ashwin, Akanksha, Pragati, Rajashree, Tanmay"
+date: "November 29, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(data.table)
+library(Hmisc)
+library(dplyr)
+library(ggplot2)
+library(leaps)
+library(gains)
+library(gplots)
+library(caret)
+
+athlete_df <- fread("athlete_events.csv")
+regions.df <- fread("noc_regions.csv")
+
+colnames(regions.df) <- c("NOC","Country","Notes")
+
+dim(athlete_df)
+dim(regions.df)
+
+glimpse(athlete_df)
+glimpse(regions.df)
+
+mergd.athlete.df <- merge(athlete_df, regions.df, by="NOC")
+Full.athlete.df <- mergd.athlete.df[,c(2,3,4,5,6,7,8,10,11,12,13,14,1,16,15,17)]
+Full.athlete.df$Medal <- as.factor(Full.athlete.df$Medal)
+
+glimpse(Full.athlete.df)
+
+miss.val <- data.frame(miss.val = sapply(Full.athlete.df, function(x) +   sum((is.na(x)))))
+miss.val
+
+summary(Full.athlete.df$Age)
+summary(Full.athlete.df$Height)
+summary(Full.athlete.df$Weight)
+
+Full.athlete.df$Age <- as.numeric( impute( Full.athlete.df$Age, median))
+Full.athlete.df$Height <- as.numeric( impute( Full.athlete.df$Height,   median))
+Full.athlete.df$Weight <- as.numeric( impute( Full.athlete.df$Weight,   median))
+
+country_NA <- filter(Full.athlete.df,is.na(Country))
+unique(country_NA$Notes)
+table(country_NA$Notes)
+table(country_NA$Medal)
+
+Full.athlete.df$Medal <- factor( Full.athlete.df$Medal, exclude = NULL, 
+                          levels = c("Bronze", "Gold", "Silver", NA), 
+                          labels = c("Bronze", "Gold", "Silver", "Dnw"))
+
+Full.athlete.df <- na.omit(Full.athlete.df)
+miss.val <- data.frame(miss.val=sapply(Full.athlete.df, function(x) + sum((is.na(x)))))
+miss.val
+
+gold.medals.df <- filter( Full.athlete.df, Medal == "Gold")
+ggplot(data=gold.medals.df, aes(x=Age)) + geom_bar() +
+   geom_text(stat='count', aes(label=..count..), vjust=-1) + 
+   labs(x = "Age", y = "Number of Gold Medalists", 
+        title = "Distribution of the age of gold medalists") +
+   theme(plot.title = element_text(size=10, hjust = 0.5),
+         axis.title = element_text(size=10),
+         axis.text = element_text(size=10)) +
+   theme_classic()
+
+silver.medals.df <- filter(Full.athlete.df, Medal == "Silver")
+ ggplot(data=silver.medals.df, aes(x=Age)) + geom_bar() +
+   geom_text(stat='count', aes(label=..count..), vjust=-1) + 
+   labs(x = "Age", y = "Number of Silver Medalists", 
+        title = "Distribution of the age of Silver medalists") +
+   theme(plot.title = element_text(size=10),
+         axis.title = element_text(size=10),
+         axis.text = element_text(size=10)) +
+   theme_classic()
+ 
+ women.sum.olym.df <- Full.athlete.df[ which( Full.athlete.df$Sex == "F"
+                                          & Full.athlete.df$Season == "Summer") , ]
+ggplot(data=women.sum.olym.df, aes(x=Year)) + 
+   geom_bar() +
+   geom_text(stat='count', aes(label=..count..), vjust=-1) + 
+   labs(x = "Year", y = "Number of Participants", 
+        title = "Participation of Women in Games overtime(Summer)") +
+   theme(plot.title = element_text(size=10),
+         axis.title = element_text(size=10),
+         axis.text = element_text(size=10)) +
+   theme_classic()
+
+women.win.olym.df <- Full.athlete.df[ which( Full.athlete.df$Sex == "F"
+                                              & Full.athlete.df$Season == "Winter") , ]
+ ggplot(data=women.win.olym.df, aes(x=Year)) + 
+   geom_bar() +
+   geom_text(stat='count', aes(label=..count..), vjust=-1) + 
+   labs(x = "Year", y = "Number of Participants", 
+        title = "Participation of Women in Games overtime(Winter)") +
+   theme(plot.title = element_text(size=10),
+         axis.title = element_text(size=10),
+         axis.text = element_text(size=10)) +
+   theme_classic()
+ 
+ gold.medals.usa.df <- filter(gold.medals.df, NOC == "USA") 
+gm.usa.df <- data.frame(head(sort(table(gold.medals.usa.df$Event),decreasing = T),15))
+colnames(gm.usa.df) <- c("Sport Event","No of Gold Medals")
+
+full.usa.df <- filter(Full.athlete.df, NOC == "USA")
+goldcount <- as.data.frame(table(gold.medals.usa.df$Medal=="Gold",gold.medals.usa.df$Year))
+players <- as.data.frame(table(full.usa.df$Year))
+final.usa.df <- data.frame(Year = goldcount$Var2, Gold = goldcount$Freq, USA_contingent = players$Freq)
+
+Golds = goldcount$Freq
+USA_Contingent_Size = players$Freq
+
+ggplot(final.usa.df, aes(x= Gold, y= USA_contingent,  label=Year))+
+  geom_point(color = "navy") +geom_text(aes(label=Year),hjust=0.5, vjust=-1, size = 2)
+
+data.for.athletics.df <- filter(Full.athlete.df,
+                                Sport == "Athletics")
+
+correlation.in.athletics.df <- data.for.athletics.df[,c(4,5,6)]
+
+cor.olympics.athletics <- cor(correlation.in.athletics.df)
+
+heatmap.2(cor(correlation.in.athletics.df), Rowv = FALSE, Colv = FALSE, 
+          dendrogram = "none",cellnote = round(cor(correlation.in.athletics.df),5),
+          notecol = "black", key = FALSE, trace = 'none', margins = c(10,10),
+          main = "correlation in Athletics",xlab = "variables",ylab="variables")
+
+data.for.wrestling.df <- filter(Full.athlete.df,
+                                Sport == "Wrestling")
+
+correlation.in.wrestling.df <- data.for.wrestling.df[,c(4,5,6)]
+
+cor.olympics.wrestling <- cor(correlation.in.wrestling.df)
+heatmap.2(cor(correlation.in.wrestling.df), Rowv = FALSE, Colv = FALSE, 
+          dendrogram = "none",cellnote = round(cor(correlation.in.wrestling.df),5),
+          notecol = "black", key = FALSE, trace = 'none', margins = c(10,10),
+          main = "correlation in Wrestling",xlab = "variables",ylab="variables")
+
+swimming.df <- Full.athlete.df[which( Full.athlete.df$Sport == "Swimming"
+                                      & Full.athlete.df$Event == "Swimming Men's 100 metres Freestyle"
+                                      & Full.athlete.df$Year != 2016), ]
+
+for (i in seq_along(swimming.df$Medal)){
+  if (swimming.df$Medal[i] == "Dnw") {
+    swimming.df$Outcome[i] <- 0
+  } else {
+    swimming.df$Outcome[i] <- 1
+  }
+}
+
+swimming.log <- glm(Outcome ~ Age + Weight + Height + NOC, data = swimming.df, family = "binomial")
+options(scipen=999)
+
+summary(swimming.log)
+
+swimming.log.pred <- predict(swimming.log, swimming.df, type = "response")
+
+swimming.cm <- t(table(swimming.df$Outcome , swimming.log.pred > 0.185, dnn = c("Actual Class","Predictive Class")))
+
+rownames(swimming.cm) <- colnames(swimming.cm)
+
+confusionMatrix(swimming.cm, positive = "1", dnn = c("Actual Class","Predictive Class"))
+
+
+swimming.df.16 <- Full.athlete.df[which( Full.athlete.df$Sport == "Swimming"
+                                         & Full.athlete.df$Event == "Swimming Men's 100 metres Freestyle"
+                                         & Full.athlete.df$Year == 2016), ]
+
+for (i in seq_along(swimming.df.16$Medal)){
+  if (swimming.df.16$Medal[i] == "Dnw") {
+    swimming.df.16$Outcome[i] <- 0
+  } else {
+    swimming.df.16$Outcome[i] <- 1
+  }
+}
+
+swimming.df.pred.16 <- predict(swimming.log, swimming.df.16, type = "response")
+
+swimming.df.predicted <- t(t(swimming.df.pred.16))
+
+for (i in seq_along(swimming.df.predicted)){
+  swimming.df.16$Predicted[i] <- as.numeric(swimming.df.pred.16[i])
+}
+
+swimming.cm.16 <- t(table(swimming.df.16$Outcome , swimming.df.16$Predicted > 0.185, dnn = c("Actual Class","Predictive Class")))
+rownames(swimming.cm.16) <- colnames(swimming.cm)
+
+confusionMatrix(swimming.cm.16, positive = "1", dnn = c("Actual Class","Predictive Class"))
+
+swimming.16.pred.winners <- swimming.df.16[which(swimming.df.16$Predicted >= 0.185),]
+swimming.16.winners <- swimming.df.16[which(swimming.df.16$Outcome == 1),]
+
+as.character(swimming.16.pred.winners$Name)
+
+as.character(swimming.16.winners$Name)
+
+library(gains)
+gain <- gains(swimming.df$Outcome, swimming.log.pred, groups = 10)
+### Plot Lift Chart
+plot(c(0,gain$cume.pct.of.total*sum(swimming.df$Outcome))~c(0,gain$cume.obs), 
+     xlab = "# cases", ylab = "Cumulative", main = "", type = "l")
+lines(c(0,sum(swimming.df$Outcome))~c(0, dim(swimming.df)[1]), lty = 5)
+
+heights <- gain$mean.resp/mean(swimming.df$Outcome)
+midpoints <- barplot(heights, names.arg = gain$depth,  ylim = c(0,9), col = "gold3",  
+                     xlab = "Percentile", ylab = "Mean Response", 
+                     main = "Decile-wise lift chart")
+
+gain_valid <- gains(swimming.df.16$Outcome,swimming.df.pred.16,groups = 10)
+### Plot Lift Chart
+plot(c(0,gain_valid$cume.pct.of.total*sum(swimming.df.16$Outcome))~c(0,gain_valid$cume.obs), 
+     xlab = "# cases", ylab = "Cumulative", main = "", type = "l")
+lines(c(0,sum(swimming.df.16$Outcome))~c(0, dim(swimming.df.16)[1]), lty = 5)
+
+heights <- gain_valid$mean.resp/mean(swimming.df.16$Outcome)
+midpoints <- barplot(heights, names.arg = gain_valid$depth,  ylim = c(0,9), col = "gold3",  
+                     xlab = "Percentile", ylab = "Mean Response", 
+                     main = "Decile-wise lift chart")
+
+Athletics_100_meter_df <- Full.athlete.df[which( Full.athlete.df$Sport == "Athletics"
+                                                 & Full.athlete.df$Event == "Athletics Men's 100 metres"
+                                                 & Full.athlete.df$Year != 2016), ]
+
+for (i in seq_along(Athletics_100_meter_df$Medal)){
+  if (Athletics_100_meter_df$Medal[i] == "Dnw") {
+    Athletics_100_meter_df$Outcome[i] <- 0
+  } else {
+    Athletics_100_meter_df$Outcome[i] <- 1
+  }
+}
+table(Athletics_100_meter_df$Outcome)
+
+Athletics_100_meter_log<- glm(Outcome ~ Age + Weight + Height + NOC, data = Athletics_100_meter_df, family = "binomial")
+options(scipen=999)
+
+summary(Athletics_100_meter_log)
+
+Athletics_100_meter_log_pred <- predict(Athletics_100_meter_log, Athletics_100_meter_df, type = "response")
+
+Athletics_100_meter_cm <- t(table(Athletics_100_meter_df$Outcome , Athletics_100_meter_log_pred > 0.175, dnn = c("Actual Class","Predictive Class")))
+rownames(Athletics_100_meter_cm) <- colnames(Athletics_100_meter_cm)
+
+myConfusion <- confusionMatrix(Athletics_100_meter_cm, positive = "1", dnn = c("Actual Class","Predictive Class"))
+myConfusion
+
+Athletics_100_meter_Year_16_df <- Full.athlete.df[which( Full.athlete.df$Sport == "Athletics"
+                                                         & Full.athlete.df$Event == "Athletics Men's 100 metres"
+                                                         & Full.athlete.df$Year == 2016), ]
+
+for (i in seq_along(Athletics_100_meter_Year_16_df$Medal)){
+  if (Athletics_100_meter_Year_16_df$Medal[i] == "Dnw") {
+    Athletics_100_meter_Year_16_df$Outcome[i] <- 0
+  } else {
+    Athletics_100_meter_Year_16_df$Outcome[i] <- 1
+  }
+}
+table(Athletics_100_meter_Year_16_df$Outcome)
+
+Athletics_100_meter_16_pred <- predict(Athletics_100_meter_log, Athletics_100_meter_Year_16_df, type = "response")
+Athletics_100_meter_16_predicted <- t(t(Athletics_100_meter_16_pred))
+
+for (i in seq_along(Athletics_100_meter_16_predicted)){
+  Athletics_100_meter_Year_16_df$Predicted[i] <- as.numeric(Athletics_100_meter_16_pred[i])
+}
+
+Athletics_100_meter_Year_16_cm <- t(table(Athletics_100_meter_Year_16_df$Outcome , Athletics_100_meter_Year_16_df$Predicted > 0.175, dnn = c("Actual Class","Predictive Class")))
+rownames(Athletics_100_meter_Year_16_cm) <- colnames(Athletics_100_meter_Year_16_cm)
+
+confusionMatrix(Athletics_100_meter_Year_16_cm, positive = "1", dnn = c("Actual Class","Predictive Class"))
+
+Athletics_100_meter_16.pred.winners <- Athletics_100_meter_Year_16_df[which(Athletics_100_meter_Year_16_df$Predicted >= 0.175),]
+Athletics_100_meter_16.winner <- Athletics_100_meter_Year_16_df[which(Athletics_100_meter_Year_16_df$Outcome == 1),]
+
+as.character(Athletics_100_meter_16.pred.winners$Name)
+
+as.character(Athletics_100_meter_16.winner$Name)
+
+gain_valid <- gains(Athletics_100_meter_Year_16_df$Outcome,Athletics_100_meter_16_pred,groups = 10)
+plot(c(0,gain_valid$cume.pct.of.total*sum(Athletics_100_meter_Year_16_df$Outcome))~c(0,gain_valid$cume.obs), 
+     xlab = "# cases", ylab = "Cumulative", main = "", type = "l")
+lines(c(0,sum(Athletics_100_meter_Year_16_df$Outcome))~c(0, dim(Athletics_100_meter_Year_16_df)[1]), lty = 5)
+
+heights <- gain_valid$mean.resp/mean(Athletics_100_meter_Year_16_df$Outcome)
+midpoints <- barplot(heights, names.arg = gain_valid$depth,  ylim = c(0,9), col = "gold3",  
+                     xlab = "Percentile", ylab = "Mean Response", 
+                     main = "Decile-wise lift chart")
+
+
+Football.germany <- Full.athlete.df[which(Full.athlete.df$Event == "Football Men's Football" 
+                      & Full.athlete.df$Country == "Germany"
+                      & Full.athlete.df$Year == 2016),]
+Football.germany[,c(2,3,4,5,6,14,15)]
+
+Football.df <- Full.athlete.df[which(Full.athlete.df$Sport == "Football"
+                              & Full.athlete.df$Event == "Football Men's Football"),]
+data.football.age<- data.frame(Football.df %>%
+        group_by(Country, Year) %>%
+          summarise(mean = mean(Age)))
+colnames(data.football.age) <- c("Country","Year","Mean Age")
+head(data.football.age)
+
+data.football.height<- data.frame(Football.df %>%
+                                 group_by(Country, Year) %>%
+                                 summarise(mean = mean(Height)))
+colnames(data.football.height) <- c("Country","Year","Mean Height")
+
+data.football.weight<- data.frame(Football.df %>%
+                                    group_by(Country, Year) %>%
+                                    summarise(mean = mean(Weight)))
+colnames(data.football.weight) <- c("Country","Year","Mean Weight")
+
+data.football.medal <-Football.df[,c(8,14,15)] 
+data.football.medal<- unique(data.football.medal)
+
+mergd.football.df <- merge(data.football.age,data.football.medal, by = c("Year", "Country"))
+
+mergd.football.df <- merge(mergd.football.df,data.football.height, by = c("Year", "Country"))
+
+mergd.football.df <- merge(mergd.football.df,data.football.weight, by = c("Year", "Country"))
+
+#Rearranging the columns: 
+mergd.football.df <- mergd.football.df[, c(1,2,3,5,6,4)]
+
+colnames(mergd.football.df) <- c("Year", "Country", "Age", "Height", "Weight", "Medal")
+tail(mergd.football.df)
+
+train.football.df <- mergd.football.df[which(mergd.football.df$Year != 2016), ]
+
+for (i in seq_along(train.football.df$Medal)){
+  if (train.football.df$Medal[i] == "Dnw") {
+    train.football.df$Outcome[i] <- 0
+  } else {
+    train.football.df$Outcome[i] <- 1
+  }
+}
+
+train.football.log <- glm(Outcome ~ Age + Weight + Height + Country, 
+                       data = train.football.df, 
+                       family = "binomial")
+options(scipen=999)
+
+train.football.log.pred <- predict(train.football.log, train.football.df,
+                                type = "response")
+
+train.football.cm <- t(table(train.football.df$Outcome , train.football.log.pred > 0.28, dnn = c("Actual Class","Predictive Class")))
+rownames(train.football.cm) <- colnames(train.football.cm)
+
+confusionMatrix(train.football.cm, positive = "1", dnn = c("Actual Class","Predictive Class"))
+
+valid.football.16 <- mergd.football.df[which( mergd.football.df$Year == 2016), ]
+
+for (i in seq_along(valid.football.16$Medal)){
+  if (valid.football.16$Medal[i] == "Dnw") {
+    valid.football.16$Outcome[i] <- 0
+  } else {
+    valid.football.16$Outcome[i] <- 1
+  }
+}
+
+
+valid.football.16.pred <- predict(train.football.log, valid.football.16, type = "response")
+valid.football.16.predicted <- t(t(valid.football.16.pred))
+
+for (i in seq_along(valid.football.16.predicted)){
+  valid.football.16$Predicted[i] <- as.numeric(valid.football.16.pred[i])
+}
+
+valid.football.16.cm <- t(table(valid.football.16$Outcome , valid.football.16$Predicted > 0.28, dnn = c("Actual Class","Predictive Class")))
+rownames(valid.football.16.cm) <- colnames(valid.football.16.cm)
+
+confusionMatrix(valid.football.16.cm, positive = "1", dnn = c("Actual Class","Predictive Class"))
+
+valid.football.16.pred.winners <- valid.football.16[which(valid.football.16$Predicted >= 0.28),]
+valid.football.16.winners <- valid.football.16[which(valid.football.16$Outcome == 1),]
+
+as.character(valid.football.16.pred.winners$Country)
+
+as.character(valid.football.16.winners$Country)
+
+
+Tennis.df <- Full.athlete.df[which(Full.athlete.df$Sport == "Tennis"
+                                     & Full.athlete.df$Event == "Tennis Men's Doubles"), ]
+
+
+data.tennis.age <- data.frame(aggregate(Tennis.df$Age, 
+                                          by = list(Tennis.df$Team,Tennis.df$Year), 
+                                          FUN = mean, drop = FALSE))
+colnames(data.tennis.age) <- c("Team","Year","Mean Age")
+
+data.tennis.age <- data.tennis.age[!is.nan(data.tennis.age$`Mean Age`),]
+head(data.tennis.age)
+
+data.tennis.height <- data.frame(aggregate(Tennis.df$Height, 
+                                             by = list(Tennis.df$Team,Tennis.df$Year), 
+                                             FUN = mean, drop = FALSE))
+
+colnames(data.tennis.height) <- c("Team","Year","Mean Height")
+data.tennis.height <- data.tennis.height[!is.nan(data.tennis.height$`Mean Height`),]
+head(data.tennis.height)
+
+data.tennis.weight <- data.frame(aggregate(Tennis.df$Weight, 
+                                             by = list(Tennis.df$Team,Tennis.df$Year), 
+                                             FUN = mean, drop = FALSE))
+colnames(data.tennis.weight) <- c("Team","Year","Mean Weight")
+data.tennis.weight <- data.tennis.weight[!is.nan(data.tennis.weight$`Mean Weight`),]
+head(data.tennis.weight)
+colnames(Tennis.df)
+data.tennis.medal <-Tennis.df[,c(7,8,14,15)] 
+data.tennis.medal<- unique(data.tennis.medal)
+head(data.tennis.medal)
+mergd.tennis.df <- merge(data.tennis.age,data.tennis.medal, by = c("Year", "Team"))
+mergd.tennis.df <- merge(mergd.tennis.df,data.tennis.height, by = c("Year", "Team"))
+mergd.tennis.df <- merge(mergd.tennis.df,data.tennis.weight, by = c("Year", "Team"))
+mergd.tennis.df <- mergd.tennis.df[, c(1,2,4,3,6,7,5)]
+colnames(mergd.tennis.df) <- c("Year", "Team" ,"Country", "Age", "Height", "Weight", "Medal")
+tail(mergd.tennis.df)
+
+train.tennis.df <- mergd.tennis.df[which(mergd.tennis.df$Year != 2016), ]
+
+for (i in seq_along(train.tennis.df$Medal)){
+  if (train.tennis.df$Medal[i] == "Dnw") {
+    train.tennis.df$Outcome[i] <- 0
+  } else {
+    train.tennis.df$Outcome[i] <- 1
+  }
+}
+table(train.tennis.df$Outcome)
+
+train.tennis.log <- glm(Outcome ~ Age + Weight + Height + Country, 
+                          data = train.tennis.df, 
+                          family = "binomial")
+options(scipen=999)
+
+train.tennis.log.pred <- predict(train.tennis.log, train.tennis.df,
+                                   type = "response")
+
+train.tennis.cm <- t(table(train.tennis.df$Outcome , train.tennis.log.pred > 0.13, dnn = c("Actual Class","Predictive Class")))
+rownames(train.tennis.cm) <- colnames(train.tennis.cm)
+train.tennis.cm
+confusionMatrix(train.tennis.cm, positive = "1", dnn = c("Actual Class","Predictive Class"))
+
+valid.tennis.16 <- mergd.tennis.df[which( mergd.tennis.df$Year == 2016), ]
+
+for (i in seq_along(valid.tennis.16$Medal)){
+  if (valid.tennis.16$Medal[i] == "Dnw") {
+    valid.tennis.16$Outcome[i] <- 0
+  } else {
+    valid.tennis.16$Outcome[i] <- 1
+  }
+}
+
+
+valid.tennis.16.pred <- predict(train.tennis.log, valid.tennis.16, type = "response")
+valid.tennis.16.predicted <- t(t(valid.tennis.16.pred))
+for (i in seq_along(valid.tennis.16.predicted)){
+  valid.tennis.16$Predicted[i] <- as.numeric(valid.tennis.16.pred[i])
+}
+valid.tennis.16.cm <- t(table(valid.tennis.16$Outcome , valid.tennis.16$Predicted > 0.13, dnn = c("Actual Class","Predictive Class")))
+rownames(valid.tennis.16.cm) <- colnames(valid.tennis.16.cm)
+valid.tennis.16.cm
+confusionMatrix(valid.tennis.16.cm, positive = "1", dnn = c("Actual Class","Predictive Class"))
+
+valid.tennis.16.pred.winners <- valid.tennis.16[which(valid.tennis.16$Predicted >= 0.13),]
+valid.tennis.16.winners <- valid.tennis.16[which(valid.tennis.16$Outcome == 1),]
+
+as.character(valid.tennis.16.pred.winners$Team)
+
+as.character(valid.tennis.16.winners$Team)
+
+Figure_Skating_Women_Single.df = Full.athlete.df[which(Full.athlete.df$Sport == "Figure Skating"
+                                         & Full.athlete.df$Event == "Figure Skating Women's Singles"
+                                         & Full.athlete.df$Year != 2014),]
+
+for (i in seq_along(Figure_Skating_Women_Single.df$Medal)){
+  if (Figure_Skating_Women_Single.df$Medal[i] == "Dnw") {
+    Figure_Skating_Women_Single.df$Outcome[i] <- 0
+  } else {
+    Figure_Skating_Women_Single.df$Outcome[i] <- 1
+  }
+}
+table(Figure_Skating_Women_Single.df$Outcome)
+
+Figure_Skating_Women_Single_log<- glm(Outcome ~ Age + Weight + Height + NOC, data = Figure_Skating_Women_Single.df, family = "binomial")
+options(scipen=999)
+
+Figure_Skating_Women_Single_pred = predict(Figure_Skating_Women_Single_log,Figure_Skating_Women_Single.df, type = "response")
+
+Figure_Skating_Women_Single_cm <- t(table(Figure_Skating_Women_Single.df$Outcome , Figure_Skating_Women_Single_pred > 0.11, dnn = c("Actual Class","Predictive Class")))
+Figure_Skating_Women_Single_cm
+rownames(Figure_Skating_Women_Single_cm) <- colnames(Figure_Skating_Women_Single_cm)
+
+myConfusion = confusionMatrix(Figure_Skating_Women_Single_cm, positive = "1", dnn = c("Actual Class","Predictive Class"))
+myConfusion
+
+Figure_Skating_Women_Single_14.df = Full.athlete.df[which(Full.athlete.df$Sport == "Figure Skating"
+                                                       & Full.athlete.df$Event == "Figure Skating Women's Singles"
+                                                       & Full.athlete.df$Year == 2014), ]
+
+for (i in seq_along(Figure_Skating_Women_Single_14.df$Medal)){
+  if (Figure_Skating_Women_Single_14.df$Medal[i] == "Dnw") {
+    Figure_Skating_Women_Single_14.df$Outcome[i] <- 0
+  } else {
+    Figure_Skating_Women_Single_14.df$Outcome[i] <- 1
+  }
+}
+table(Figure_Skating_Women_Single_14.df$Outcome)
+
+Figure_Skating_Women_Single_14_pred <- predict(Figure_Skating_Women_Single_log, Figure_Skating_Women_Single_14.df, type = "response")
+Figure_Skating_Women_Single_14_predicted <- t(t(Figure_Skating_Women_Single_14_pred))
+
+for (i in seq_along(Figure_Skating_Women_Single_14_predicted)){
+  Figure_Skating_Women_Single_14.df$Predicted[i] <- as.numeric(Figure_Skating_Women_Single_14_pred[i])
+}
+
+Figure_Skating_Women_Single_14_cm <- t(table(Figure_Skating_Women_Single_14.df$Outcome , Figure_Skating_Women_Single_14.df$Predicted > 0.11, dnn = c("Actual Class","Predictive Class")))
+
+rownames(Figure_Skating_Women_Single_14_cm) <- colnames(Figure_Skating_Women_Single_14_cm)
+
+confusionMatrix(Figure_Skating_Women_Single_14_cm, positive = "1", dnn = c("Actual Class","Predictive Class"))
+
+Figure_Skating_Women_Single_14_pred_winner <- Figure_Skating_Women_Single_14.df[which(Figure_Skating_Women_Single_14.df$Predicted >= 0.11),]
+Figure_Skating_Women_Single_14_winner <- Figure_Skating_Women_Single_14.df[which(Figure_Skating_Women_Single_14.df$Outcome == 1),]
+
+as.character(Figure_Skating_Women_Single_14_pred_winner$Name)
+
+as.character(Figure_Skating_Women_Single_14_winner$Name)
+
+```
+
